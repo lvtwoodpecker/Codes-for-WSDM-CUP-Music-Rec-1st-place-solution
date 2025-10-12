@@ -11,7 +11,7 @@ song = pd.DataFrame({'song_id': range(max(train.song_id.max(), test.song_id.max(
 song = song.merge(song_origin, on='song_id', how='left')
 song = song.merge(song_extra, on='song_id', how='left')
 
-data = train[['msno', 'song_id']].append(test[['msno', 'song_id']])
+data = train[['msno', 'song_id']]._append(test[['msno', 'song_id']])
 
 ## member_cnt
 mem_rec_cnt = data.groupby(by='msno').count()['song_id'].to_dict()
@@ -57,14 +57,13 @@ song['genre_rec_cnt'] = song['first_genre_id'].apply(lambda x: genre_rec_cnt[x] 
 
 ## msno context features
 dummy_feat = ['source_system_tab', 'source_screen_name', 'source_type']
-concat = train.drop('target', axis=1).append(test.drop('id', axis=1))
+concat = train.drop('target', axis=1)._append(test.drop('id', axis=1))
 
 for feat in dummy_feat:
     feat_dummies = pd.get_dummies(concat[feat])
     feat_dummies.columns = ['msno_%s_'%feat + '%s'%col for col in feat_dummies.columns]
     feat_dummies['msno'] = concat['msno'].values
     feat_dummies = feat_dummies.groupby('msno').mean()
-    feat_dummies['msno'] = feat_dummies.index
     member = member.merge(feat_dummies, on='msno', how='left')
 
 train_temp = train.merge(member, on='msno', how='left')

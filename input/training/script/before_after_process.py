@@ -11,7 +11,7 @@ print(len(tr))
 print(len(te))
 
 ## continous index
-concat = tr[['msno', 'song_id', 'source_type', 'source_screen_name', 'timestamp']].append(te[['msno', \
+concat = tr[['msno', 'song_id', 'source_type', 'source_screen_name', 'timestamp']]._append(te[['msno', \
         'song_id', 'source_type', 'source_screen_name', 'timestamp']])
 
 ## before data

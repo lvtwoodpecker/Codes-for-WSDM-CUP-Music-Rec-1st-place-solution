@@ -11,7 +11,7 @@ songs_extra = pd.read_csv('../source_data/song_extra_info.csv')
 train = pd.read_csv('../source_data/train.csv')
 test = pd.read_csv('../source_data/test.csv')
 
-song_id_set = set(train['song_id'].append(test['song_id']))
+song_id_set = set(train['song_id']._append(test['song_id']))
 
 songs['appeared'] = songs['song_id'].apply(lambda x: True if x in song_id_set else False)
 songs = songs[songs.appeared]
@@ -21,7 +21,7 @@ songs_extra['appeared'] = songs_extra['song_id'].apply(lambda x: True if x in so
 songs_extra = songs_extra[songs_extra.appeared]
 songs_extra.drop('appeared', axis=1, inplace=True)
 
-msno_set = set(train['msno'].append(test['msno']))
+msno_set = set(train['msno']._append(test['msno']))
 
 members['appeared'] = members['msno'].apply(lambda x: True if x in msno_set else False)
 members = members[members.appeared]
@@ -39,7 +39,7 @@ test['msno'] = msno_encoder.transform(test['msno'])
 print('MSNO done.')
 
 song_id_encoder = LabelEncoder()
-song_id_encoder.fit(train['song_id'].append(test['song_id']))
+song_id_encoder.fit(train['song_id']._append(test['song_id']))
 songs['song_id'] = song_id_encoder.transform(songs['song_id'])
 songs_extra['song_id'] = song_id_encoder.transform(songs_extra['song_id'])
 train['song_id'] = song_id_encoder.transform(train['song_id'])
@@ -51,7 +51,7 @@ print('Song_id done.')
 columns = ['source_system_tab', 'source_screen_name', 'source_type']
 for column in columns:
     column_encoder = LabelEncoder()
-    column_encoder.fit(train[column].append(test[column]))
+    column_encoder.fit(train[column]._append(test[column]))
     train[column] = column_encoder.transform(train[column])
     test[column] = column_encoder.transform(test[column])
 
@@ -74,7 +74,7 @@ print('Members information done.')
 ## preprocess the features in songs.csv
 genre_id = np.zeros((len(songs), 4))
 for i in range(len(songs)):
-    if not isinstance(songs['genre_ids'].values[i], basestring):
+    if not isinstance(songs['genre_ids'].values[i], str):
         continue
     ids = str(songs['genre_ids'].values[i]).split('|')
     if len(ids) > 2:
@@ -93,7 +93,7 @@ songs['third_genre_id'] = genre_id[:, 2]
 songs['genre_id_cnt'] = genre_id[:, 3]
 
 genre_encoder = LabelEncoder()
-genre_encoder.fit((songs.first_genre_id.append(songs.second_genre_id)).append(songs.third_genre_id))
+genre_encoder.fit((songs.first_genre_id._append(songs.second_genre_id))._append(songs.third_genre_id))
 songs['first_genre_id'] = genre_encoder.transform(songs['first_genre_id'])
 songs['second_genre_id'] = genre_encoder.transform(songs['second_genre_id'])
 songs['third_genre_id'] = genre_encoder.transform(songs['third_genre_id'])

@@ -8,7 +8,7 @@ train = pd.read_csv('../temporal_data/train_id.csv')
 test = pd.read_csv('../temporal_data/test_id.csv')
 song = pd.read_csv('../temporal_data/songs_id_cnt.csv')
 
-data = train[['msno', 'song_id']].append(test[['msno', 'song_id']])
+data = train[['msno', 'song_id']]._append(test[['msno', 'song_id']])
 
 print('Data loaded.')
 

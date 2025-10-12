@@ -9,7 +9,7 @@ te = pd.read_csv('../temporal_data/test_id_cnt.csv')
 member = pd.read_csv('../temporal_data/members_id_cnt.csv')
 song = pd.read_csv('../temporal_data/songs_id_cnt_isrc.csv')
 
-concat = tr[['msno', 'song_id']].append(te[['msno', 'song_id']])
+concat = tr[['msno', 'song_id']]._append(te[['msno', 'song_id']])
 member_cnt = concat['msno'].max() + 1
 song_cnt = concat['song_id'].max() + 1
 artist_cnt = int(song['artist_name'].max() + 1)

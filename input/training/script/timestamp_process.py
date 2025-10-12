@@ -9,7 +9,7 @@ mem = pd.read_csv('../temporal_data/members_id_cnt_svd.csv')
 song = pd.read_csv('../temporal_data/songs_id_cnt_isrc_svd.csv')
 
 ## continous index
-concat = tr[['msno', 'song_id']].append(te[['msno', 'song_id']])
+concat = tr[['msno', 'song_id']]._append(te[['msno', 'song_id']])
 concat['timestamp'] = range(len(concat))
 
 ## windows_based count

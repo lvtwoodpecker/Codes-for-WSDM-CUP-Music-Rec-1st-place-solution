@@ -173,8 +173,10 @@ def transfer(x):
         return x
 drop_col = [transfer(i) for i in drop_col]
 
-train.drop(drop_col, axis=1, inplace=True)
-test.drop(drop_col, axis=1, inplace=True)
+# Only drop columns that actually exist in the dataframes
+existing_drop_col = [col for col in drop_col if col in train.columns]
+train.drop(existing_drop_col, axis=1, inplace=True)
+test.drop(existing_drop_col, axis=1, inplace=True)
 
 ## print data information
 print('Data preparation done.')
@@ -190,8 +192,7 @@ print(train.columns)
 #####################################################
 
 ## model training
-train_data = lgb.Dataset(train, label=train_y, max_bin=255, \
-        free_raw_data=True)
+train_data = lgb.Dataset(train, label=train_y, free_raw_data=True)
 
 del train
 gc.collect()
@@ -229,7 +230,7 @@ for i in range(1):
     num_round = para['bst_rnd'].values[i]
     print('Round number: %d'%num_round)
 
-    gbm = lgb.train(params, train_data, num_round, valid_sets=train_data, verbose_eval=100)
+    gbm = lgb.train(params, train_data, num_round, valid_sets=[train_data], callbacks=[lgb.log_evaluation(100)])
 
     val_auc = para['val_auc'].values[i]
     print('Model training done. Validation AUC: %.5f'%val_auc)

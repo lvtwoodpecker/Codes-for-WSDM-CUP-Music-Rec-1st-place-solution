@@ -6,7 +6,7 @@ te = pd.read_csv('../test.csv')
 song = pd.read_csv('../songs_nn.csv')
 
 concat = tr[['msno', 'song_id', 'source_system_tab', 'source_screen_name', \
-        'source_type']].append(te[['msno', 'song_id', 'source_system_tab', \
+        'source_type']]._append(te[['msno', 'song_id', 'source_system_tab', \
         'source_screen_name', 'source_type']])
 concat = concat.merge(song[['song_id', 'song_length', 'artist_name', 'first_genre_id', \
         'artist_rec_cnt', 'song_rec_cnt', 'artist_song_cnt', 'xxx', 'yy', \
@@ -23,13 +23,13 @@ mem_add = pd.DataFrame({'msno': range(concat['msno'].max()+1)})
 data_avg = concat[['msno', 'song_length', 'artist_song_cnt', \
         'artist_rec_cnt', 'song_rec_cnt', 'yy']].groupby('msno').mean()
 data_avg.columns = ['msno_'+i+'_mean' for i in data_avg.columns]
-data_avg['msno'] = data_avg.index.values
+data_avg = data_avg.reset_index()
 mem_add = mem_add.merge(data_avg, on='msno', how='left')
 
 data_std = concat[['msno', 'song_length', 'artist_song_cnt', \
         'artist_rec_cnt', 'song_rec_cnt', 'yy']].groupby('msno').std()
 data_std.columns = ['msno_'+i+'_std' for i in data_std.columns]
-data_std['msno'] = data_std.index.values
+data_std = data_std.reset_index()
 mem_add = mem_add.merge(data_std, on='msno', how='left')
 
 artist_msno = concat[['msno', 'artist_name']].groupby('msno').apply(lambda x: len(set(x['artist_name'].values)))
@@ -40,7 +40,7 @@ language_dummy = pd.get_dummies(concat['language'])
 language_dummy['msno'] = concat['msno'].values
 language_prob = language_dummy.groupby('msno').mean()
 language_prob.columns = ['msno_language_%d'%i for i in language_prob.columns]
-language_prob['msno'] = language_prob.index
+language_prob = language_prob.reset_index()
 mem_add = mem_add.merge(language_prob, on='msno', how='left')
 
 mem_add.to_csv('../members_add.csv', index=False)
