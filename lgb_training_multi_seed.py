@@ -338,7 +338,7 @@ def train_lgb_model(random_seed, folder='training', test_mode=False):
 
 if __name__ == '__main__':
     # Define seeds to use
-    seeds = [13, 42, 123, 456, 789, 1011, 2022, 3033, 4044, 5055]
+    seeds = [13, 25, 37, 49, 61, 73, 85, 97, 109, 121]
     
     folder = 'training'
     

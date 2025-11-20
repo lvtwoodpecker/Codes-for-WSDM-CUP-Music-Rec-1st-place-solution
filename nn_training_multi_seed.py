@@ -32,7 +32,7 @@ def train_nn_model(random_seed, folder='training', config_index=0, test_mode=Fal
     Returns predictions, ground truth, and metrics.
     """
     print(f'\n{"="*60}')
-    print(f'Training with random seed: {random_seed}, config: {config_index}')
+    print(f'Training with random seed: {random_seed}')
     print(f'{"="*60}\n')
     
     data_prep_start_time = time.time()
@@ -529,7 +529,7 @@ def train_nn_model(random_seed, folder='training', config_index=0, test_mode=Fal
 
 if __name__ == '__main__':
     # Define seeds to use
-    seeds = [13, 42, 123, 456, 789, 1011, 2022, 3033, 4044, 5055]
+    seeds = [13, 25, 37, 49, 61, 73, 85, 97, 109, 121]
     
     folder = 'training'
     
