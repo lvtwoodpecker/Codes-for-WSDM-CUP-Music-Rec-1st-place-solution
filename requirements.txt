@@ -2,6 +2,11 @@
 # IMPORTANT: This project requires Python 3.11 or 3.12 (NOT 3.13)
 # TensorFlow 2.20.0+ is not compatible with Python 3.13
 
+# Run using these command:
+# python3.11 -m venv venv 
+# source venv/bin/activate
+# pip install -r requirements.txt
+
 # Core Data Science Libraries
 numpy>=1.21.0,<2.0.0
 pandas>=1.3.0,<3.0.0
