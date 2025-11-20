@@ -8,7 +8,7 @@ import pandas as pd
 import tensorflow as tf
 
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, log_loss
 from sklearn.model_selection import train_test_split
 
 from keras.models import Model
@@ -503,6 +503,16 @@ def train_nn_model(random_seed, folder='training', config_index=0, test_mode=Fal
     
     print(f'Predictions saved to: {output_filename}')
     
+    # Save summary file for easy recovery
+    seed_summary_filename = './temp_nn/seed%d_summary.csv' % random_seed
+    seed_summary = pd.DataFrame({
+        'seed': [random_seed],
+        'auc': [val_auc_calculated],
+        'loss': [val_loss],
+        'filename': [output_filename]
+    })
+    seed_summary.to_csv(seed_summary_filename, index=False)
+    
     return {
         'seed': random_seed,
         'predictions': test_pred.ravel(),
@@ -535,15 +545,53 @@ if __name__ == '__main__':
     print(f'{"="*60}\n')
     
     results = []
+    os.makedirs('./temp_nn', exist_ok=True)
     
     for seed in seeds:
+        # Check if this seed has already been completed by looking for summary file
+        seed_summary_file = './temp_nn/seed%d_summary.csv' % seed
+        
+        if os.path.exists(seed_summary_file):
+            print(f'\nSeed {seed} already completed - loading from summary file\n')
+            try:
+                # Load existing summary
+                seed_summary = pd.read_csv(seed_summary_file)
+                existing_filename = seed_summary['filename'].values[0]
+                
+                # Verify the actual output file exists
+                if os.path.exists(existing_filename):
+                    # Load the predictions file to reconstruct results
+                    existing_results = pd.read_csv(existing_filename)
+                    
+                    result = {
+                        'seed': seed,
+                        'predictions': existing_results['prediction'].values,
+                        'ground_truth': existing_results['ground_truth_target'].values,
+                        'auc': seed_summary['auc'].values[0],
+                        'loss': seed_summary['loss'].values[0],
+                        'filename': existing_filename
+                    }
+                    results.append(result)
+                    continue
+                else:
+                    print(f'Warning: Summary file exists but output file {existing_filename} not found. Re-running seed {seed}.')
+            except Exception as e:
+                print(f'Warning: Could not load existing results for seed {seed}: {e}')
+                print(f'Re-running seed {seed}...')
+        
+        # Run training for this seed
         try:
+            print(f'\n{"="*60}')
+            print(f'Starting training for seed {seed}')
+            print(f'{"="*60}\n')
             result = train_nn_model(seed, folder, config_index=0, test_mode=TEST_MODE)
             results.append(result)
+            print(f'✓ Seed {seed} completed successfully: AUC={result["auc"]:.5f}, Loss={result["loss"]:.5f}')
         except Exception as e:
-            print(f'Error with seed {seed}: {str(e)}')
+            print(f'\n✗ Error with seed {seed}: {str(e)}')
             import traceback
             traceback.print_exc()
+            print(f'Continuing with next seed...\n')
             continue
     
     # Summary statistics
