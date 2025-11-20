@@ -450,7 +450,7 @@ def get_model(K, K0, lw=1e-4, lw1=1e-4, lr=1e-3, act='relu', batchnorm=False):
 
 ## train the model
 para = pd.read_csv('./nn_record.csv').sort_values(by='val_auc', ascending=False)
-for i in range(5):
+for i in range(1):
     training_start_time = time.time()
 
     K = para['K'].values[i]
