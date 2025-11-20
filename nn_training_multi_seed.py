@@ -5,7 +5,33 @@ import time
 import numpy as np
 import pandas as pd
 
+# Configure TensorFlow to use GPU before importing
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Suppress warnings
+
 import tensorflow as tf
+
+# Verify and configure GPU
+print('\n' + '='*60)
+print('TensorFlow GPU Configuration')
+print('='*60)
+print(f'TensorFlow version: {tf.__version__}')
+
+# List available GPUs
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
+    print(f'Found {len(gpus)} GPU(s):')
+    for i, gpu in enumerate(gpus):
+        print(f'  GPU {i}: {gpu.name}')
+    # Configure GPU memory growth to avoid allocation errors
+    try:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
+        print('GPU memory growth enabled')
+    except RuntimeError as e:
+        print(f'Warning: Could not set GPU memory growth: {e}')
+else:
+    print('WARNING: No GPUs detected! Training will use CPU (much slower)')
+print('='*60 + '\n')
 
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_auc_score, log_loss
@@ -193,6 +219,16 @@ def train_nn_model(random_seed, folder='training', config_index=0, test_mode=Fal
             'msno_xxx_prob', 'msno_language_prob', 'msno_yy_prob', 'msno_source_prob', \
             'song_source_system_tab_prob', 'song_source_screen_name_prob', 'song_source_type_prob']
 
+    # Check which context features actually exist in the data
+    existing_context_features = [f for f in context_features if f in train.columns]
+    missing_context_features = [f for f in context_features if f not in train.columns]
+    
+    if missing_context_features:
+        print(f'Warning: {len(missing_context_features)} context features not found in data: {missing_context_features[:5]}...')
+        print(f'Using {len(existing_context_features)} existing features instead.')
+    
+    # Use only existing features
+    context_features = existing_context_features
     train_context = train[context_features].values
     test_context = test[context_features].values
     
@@ -394,16 +430,40 @@ def train_nn_model(random_seed, folder='training', config_index=0, test_mode=Fal
                 usr_component_input, usr_artist_component_input], name='usr_profile')
         song_profile = concatenate(embedding_outputs[4:7]+genre_outputs+[song_input, \
                 song_component_input, song_artist_component_input], name='song_profile')
-        before_song_profile = concatenate([before_song_component_input, before_song_artist_component_input], name='before_song_profile')
-        after_song_profile = concatenate([after_song_component_input, after_song_artist_component_input], name='after_song_profile')
+                
+        multiply_component = dot([usr_component_input, song_component_input], axes=1, name='component_dot')
+        multiply_artist_component = dot([usr_artist_component_input, \
+                song_artist_component_input], axes=1, name='artist_component_dot')
+        multiply_before_song = dot([before_song_component_input, song_component_input], \
+                normalize=True, axes=1, name='before_component_dot')
+        multiply_after_song = dot([after_song_component_input, song_component_input], \
+                normalize=True, axes=1, name='after_component_dot')
+        multiply_before_artist = dot([before_song_artist_component_input, song_artist_component_input], \
+                normalize=True, axes=1, name='before_artist_component_dot')
+        multiply_after_artist = dot([after_song_artist_component_input, song_artist_component_input], \
+                normalize=True, axes=1, name='after_artist_component_dot')
+        context_profile = concatenate(embedding_outputs[7:]+[context_input, \
+                multiply_component, multiply_artist_component, before_song_component_input, \
+                after_song_component_input, before_song_artist_component_input, \
+                after_song_artist_component_input, multiply_before_song, multiply_after_song, \
+                multiply_before_artist, multiply_after_artist], name='context_profile')
         
-        # interaction
-        usr_song = dot([embedding_outputs[0], embedding_outputs[4]], axes=1, normalize=False, name='usr_song')
-        usr_before_song = dot([embedding_outputs[0], embedding_outputs[5]], axes=1, normalize=False, name='usr_before_song')
-        usr_after_song = dot([embedding_outputs[0], embedding_outputs[6]], axes=1, normalize=False, name='usr_after_song')
+        # user field
+        usr_embeddings = FunctionalDense(K*2, usr_profile, lw1=lw1, batchnorm=batchnorm, act=act, name='usr_profile')
+        usr_embeddings = Dense(K, name='usr_profile_output')(usr_embeddings)
+        usr_embeddings = add([usr_embeddings, embedding_outputs[0]], name='usr_embeddings')
         
-        joint_embeddings = concatenate([usr_profile, song_profile, before_song_profile, after_song_profile, \
-                usr_song, usr_before_song, usr_after_song, context_input], name='joint_embeddings')
+        # song field
+        song_embeddings = FunctionalDense(K*2, song_profile, lw1=lw1, batchnorm=batchnorm, act=act, name='song_profile')
+        song_embeddings = Dense(K, name='song_profile_output')(song_embeddings)
+        #song_embeddings = add([song_embeddings, embedding_outputs[4]], name='song_embeddings')
+        
+        # context field
+        context_embeddings = FunctionalDense(K, context_profile, lw1=lw1, batchnorm=batchnorm, act=act, name='context_profile')
+
+        # joint embeddings
+        joint = dot([usr_embeddings, song_embeddings], axes=1, normalize=False, name='pred_cross')
+        joint_embeddings = concatenate([usr_embeddings, song_embeddings, context_embeddings, joint], name='joint_embeddings')
         
         # top model
         preds0 = FunctionalDense(K*2, joint_embeddings, batchnorm=batchnorm, act=act, name='preds_0')
