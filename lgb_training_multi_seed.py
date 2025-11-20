@@ -8,7 +8,10 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score, log_loss
 import os
 
-def train_lgb_model(random_seed, folder='training'):
+# Set TEST_MODE = True for quick testing (fewer rounds, smaller data)
+TEST_MODE = False  # Change to True for quick testing
+
+def train_lgb_model(random_seed, folder='training', test_mode=False):
     """
     Train LightGBM model with a specific random seed for train/val split.
     Returns predictions, ground truth, and metrics.
@@ -20,12 +23,26 @@ def train_lgb_model(random_seed, folder='training'):
     param_start_time = time.time()
     
     ## load data
+    if test_mode:
+        print("TEST_MODE: Loading only 10,000 rows for quick testing")
+        nrows = 10000
+    else:
+        nrows = None
+    
     if folder == 'training':
-        train_full = pd.read_csv('./input/%s/train_part.csv'%folder)
-        train_add_full = pd.read_csv('./input/%s/train_part_add.csv'%folder)
+        if nrows:
+            train_full = pd.read_csv('./input/%s/train_part.csv'%folder, nrows=nrows)
+            train_add_full = pd.read_csv('./input/%s/train_part_add.csv'%folder, nrows=nrows)
+        else:
+            train_full = pd.read_csv('./input/%s/train_part.csv'%folder)
+            train_add_full = pd.read_csv('./input/%s/train_part_add.csv'%folder)
     elif folder == 'validation':
-        train_full = pd.read_csv('./input/%s/train.csv'%folder)
-        train_add_full = pd.read_csv('./input/%s/train_add.csv'%folder)
+        if nrows:
+            train_full = pd.read_csv('./input/%s/train.csv'%folder, nrows=nrows)
+            train_add_full = pd.read_csv('./input/%s/train_add.csv'%folder, nrows=nrows)
+        else:
+            train_full = pd.read_csv('./input/%s/train.csv'%folder)
+            train_add_full = pd.read_csv('./input/%s/train_add.csv'%folder)
 
     # Extract target before splitting
     train_y_full = train_full['target'].copy()
@@ -249,7 +266,12 @@ def train_lgb_model(random_seed, folder='training'):
     print('Hyper-parameters loaded from best model.')
 
     num_round = para['bst_rnd'].values[0]
-    print(f'Round number: {num_round}')
+    # In TEST_MODE, use only 10 rounds for quick testing
+    if test_mode:
+        num_round = min(10, num_round)
+        print(f'TEST_MODE: Using {num_round} rounds instead of {para["bst_rnd"].values[0]}')
+    else:
+        print(f'Round number: {num_round}')
 
     gbm = lgb.train(params, train_data, num_round, valid_sets=[train_data], callbacks=[lgb.log_evaluation(100)])
 
@@ -275,7 +297,10 @@ def train_lgb_model(random_seed, folder='training'):
     
     # Save to CSV
     os.makedirs('./temp_lgb', exist_ok=True)
-    output_filename = './temp_lgb/lgb_%.5f_seed%d.csv'%(val_auc, random_seed)
+    if test_mode:
+        output_filename = './temp_lgb/lgb_%.5f_seed%d_test.csv'%(val_auc, random_seed)
+    else:
+        output_filename = './temp_lgb/lgb_%.5f_seed%d.csv'%(val_auc, random_seed)
     test_sub.to_csv(output_filename, index=False)
     
     print(f'Predictions saved to: {output_filename}')
@@ -307,6 +332,13 @@ if __name__ == '__main__':
     
     folder = 'training'
     
+    if TEST_MODE:
+        print("\n" + "="*60)
+        print("TEST_MODE ENABLED - Using reduced data and rounds for quick testing")
+        print("="*60 + "\n")
+        # Use fewer seeds in test mode
+        seeds = seeds[:2]  # Only use first 2 seeds for quick testing
+    
     print(f'\n{"="*60}')
     print(f'Running training with {len(seeds)} different random seeds')
     print(f'{"="*60}\n')
@@ -315,7 +347,7 @@ if __name__ == '__main__':
     
     for seed in seeds:
         try:
-            result = train_lgb_model(seed, folder)
+            result = train_lgb_model(seed, folder, test_mode=TEST_MODE)
             results.append(result)
         except Exception as e:
             print(f'Error with seed {seed}: {str(e)}')

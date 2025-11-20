@@ -465,6 +465,10 @@ def train_nn_model(random_seed, folder='training', config_index=0, test_mode=Fal
         model.save_weights(model_path)
         print(f'Model weights saved to: {model_path}')
         
+        # Skip the loss check in test mode
+        if test_mode:
+            break
+        
         if(train_loss < train_loss0 * 1.1):
             break
     
@@ -491,7 +495,10 @@ def train_nn_model(random_seed, folder='training', config_index=0, test_mode=Fal
         'ground_truth_target': test_y.values
     })
     
-    output_filename = './temp_nn/nn_%.5f_%.5f_seed%d.csv'%(val_auc_calculated, train_loss, random_seed)
+    if test_mode:
+        output_filename = './temp_nn/nn_%.5f_%.5f_seed%d_test.csv'%(val_auc_calculated, train_loss, random_seed)
+    else:
+        output_filename = './temp_nn/nn_%.5f_%.5f_seed%d.csv'%(val_auc_calculated, train_loss, random_seed)
     test_sub.to_csv(output_filename, index=False)
     
     print(f'Predictions saved to: {output_filename}')
@@ -516,6 +523,13 @@ if __name__ == '__main__':
     
     folder = 'training'
     
+    if TEST_MODE:
+        print("\n" + "="*60)
+        print("TEST_MODE ENABLED - Using reduced data and epochs for quick testing")
+        print("="*60 + "\n")
+        # Use fewer seeds in test mode
+        seeds = seeds[:2]  # Only use first 2 seeds for quick testing
+    
     print(f'\n{"="*60}')
     print(f'Running training with {len(seeds)} different random seeds')
     print(f'{"="*60}\n')
@@ -524,7 +538,7 @@ if __name__ == '__main__':
     
     for seed in seeds:
         try:
-            result = train_nn_model(seed, folder, config_index=0)
+            result = train_nn_model(seed, folder, config_index=0, test_mode=TEST_MODE)
             results.append(result)
         except Exception as e:
             print(f'Error with seed {seed}: {str(e)}')
