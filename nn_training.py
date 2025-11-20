@@ -1,50 +1,94 @@
 import os
 import gc
 import datetime
+import time
 import numpy as np
 import pandas as pd
 
+import tensorflow as tf
+
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_auc_score
+from sklearn.model_selection import train_test_split
+
 
 from keras.models import Model
 from keras.layers import Dense, Input, Embedding, Dropout, Activation, Reshape, Flatten
-from keras.layers.merge import concatenate, dot, add, multiply
-from keras.layers.normalization import BatchNormalization
-from keras.layers.advanced_activations import LeakyReLU, PReLU, ELU
+from keras.layers import concatenate, dot, add, multiply
+from keras.layers import BatchNormalization
+from keras.layers import LeakyReLU, PReLU, ELU
 from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau, LearningRateScheduler
 from keras.regularizers import l1, l2, l1_l2
 from keras.initializers import RandomUniform
 from keras.optimizers import RMSprop, Adam, SGD
 
 from nn_generator import DataGenerator
-'''
-import tensorflow as tf
-from keras.backend.tensorflow_backend import set_session
-config = tf.ConfigProto()
-config.gpu_options.per_process_gpu_memory_fraction = 0.475
-set_session(tf.Session(config=config))
-'''
 ######################################################
 ## Data Loading
 ######################################################
 
+# Set TEST_MODE = True for quick testing (fewer epochs, smaller data)
+TEST_MODE = True  # Change to True for quick testing
+
+RANDOM_SEED = 13
+
+if TEST_MODE:
+    print("\n" + "="*60)
+    print("TEST_MODE ENABLED - Using reduced data and epochs for quick testing")
+    print("="*60 + "\n")
+
 folder = 'training'
+data_prep_start_time = time.time()
 
 ## load train data
 if folder == 'training':
-    train = pd.read_csv('./input/%s/train_part.csv'%folder)
-    train_add = pd.read_csv('./input/%s/train_part_add.csv'%folder)
+    if TEST_MODE:
+        print("TEST_MODE: Loading only 10,000 rows for quick testing")
+        train_full = pd.read_csv('./input/%s/train_part.csv'%folder, nrows=10000)
+        train_add_full = pd.read_csv('./input/%s/train_part_add.csv'%folder, nrows=10000)
+    else:
+        train_full = pd.read_csv('./input/%s/train_part.csv'%folder)
+        train_add_full = pd.read_csv('./input/%s/train_part_add.csv'%folder)
 elif folder == 'validation':
-    train = pd.read_csv('./input/%s/train.csv'%folder)
-    train_add = pd.read_csv('./input/%s/train_add.csv'%folder)
-train_y = train['target']
-train.drop(['target'], inplace=True, axis=1)
+    if TEST_MODE:
+        print("TEST_MODE: Loading only 10,000 rows for quick testing")
+        train_full = pd.read_csv('./input/%s/train.csv'%folder, nrows=10000)
+        train_add_full = pd.read_csv('./input/%s/train_add.csv'%folder, nrows=10000)
+    else:
+        train_full = pd.read_csv('./input/%s/train.csv'%folder)
+        train_add_full = pd.read_csv('./input/%s/train_add.csv'%folder)
 
-test = pd.read_csv('./input/%s/test.csv'%folder)
-test_add = pd.read_csv('./input/%s/test_add.csv'%folder)
-test_id = test['id']
-test.drop(['id'], inplace=True, axis=1)
+# Extract target before splitting
+train_y_full = train_full['target'].copy()
+
+# Split data 80-20
+print(f'Splitting data with random seed: {RANDOM_SEED}')
+train_indices, test_indices, train_y, test_y = train_test_split(
+    train_full.index, train_y_full, 
+    test_size=0.2, 
+    random_state=RANDOM_SEED,
+    stratify=train_y_full  # maintain class distribution
+)
+
+# Split train and train_add using the same indices
+train = train_full.iloc[train_indices].reset_index(drop=True)
+test = train_full.iloc[test_indices].reset_index(drop=True)
+train_add = train_add_full.iloc[train_indices].reset_index(drop=True)
+test_add = train_add_full.iloc[test_indices].reset_index(drop=True)
+
+# Reset indices for targets
+train_y = train_y.reset_index(drop=True)
+test_y = test_y.reset_index(drop=True)
+
+# Drop target from both train and test
+train.drop(['target'], inplace=True, axis=1)
+test.drop(['target'], inplace=True, axis=1)
+
+print(f'Training set size: {len(train):,}')
+print(f'Validation set size: {len(test):,}')
+
+# Create test_id for saving (using index)
+test_id = test.index.values
 
 for col in train_add.columns:
     train[col] = train_add[col].values
@@ -212,10 +256,16 @@ del member
 del song
 gc.collect()
 
-dataGenerator = DataGenerator()
+data_prep_end_time = time.time()
+data_prep_runtime = data_prep_end_time - data_prep_start_time
+print(f'\nData preparation runtime: {data_prep_runtime:.2f} seconds ({data_prep_runtime/60:.2f} minutes)')
 
+# Initialize data generator
+print('Initializing data generator...')
+dataGenerator = DataGenerator()
 train_flow = dataGenerator.flow(train_embeddings+train_genre, [train_context], \
         train_y, batch_size=8192, shuffle=True)
+print('Data generator initialized successfully.')
 
 ######################################################
 ## Model Structure
@@ -240,7 +290,7 @@ def FunctionalDense(n, x, batchnorm=False, act='relu', lw1=0.0, dropout=None, na
     elif act == 'elu':
         x = ELU(name=name+'_activation')(x)
     
-    if dropout > 0:
+    if dropout is not None and dropout > 0:
         x = Dropout(dropout, name=name+'_dropout')(x)
         
     return x
@@ -255,7 +305,6 @@ def get_model(K, K0, lw=1e-4, lw1=1e-4, lr=1e-3, act='relu', batchnorm=False):
                 K if i == 0 else K0,
                 embeddings_initializer=RandomUniform(minval=-val_bound, maxval=val_bound),
                 embeddings_regularizer=l2(lw),
-                input_length=1,
                 trainable=True,
                 name=embedding_features[i]+'_embeddings')(tmp_input)
         tmp_embeddings = Flatten(name=embedding_features[i]+'_flatten')(tmp_embeddings)
@@ -275,7 +324,6 @@ def get_model(K, K0, lw=1e-4, lw1=1e-4, lr=1e-3, act='relu', batchnorm=False):
             K0,
             embeddings_initializer=RandomUniform(minval=-0.05, maxval=0.05),
             embeddings_regularizer=l2(lw),
-            input_length=1,
             trainable=True,
             name='genre_embeddings')
     for i in range(len(genre_features)):
@@ -289,7 +337,6 @@ def get_model(K, K0, lw=1e-4, lw1=1e-4, lr=1e-3, act='relu', batchnorm=False):
     usr_input = Embedding(usr_feat.shape[0],
             usr_feat.shape[1],
             weights=[usr_feat],
-            input_length=1,
             trainable=False,
             name='usr_feat')(embedding_inputs[0])
     usr_input = Flatten(name='usr_feat_flatten')(usr_input)
@@ -297,7 +344,6 @@ def get_model(K, K0, lw=1e-4, lw1=1e-4, lr=1e-3, act='relu', batchnorm=False):
     song_input = Embedding(song_feat.shape[0],
             song_feat.shape[1],
             weights=[song_feat],
-            input_length=1,
             trainable=False,
             name='song_feat')(song_id_input)
     song_input = Flatten(name='song_feat_flatten')(song_input)
@@ -305,7 +351,6 @@ def get_model(K, K0, lw=1e-4, lw1=1e-4, lr=1e-3, act='relu', batchnorm=False):
     usr_component_input = Embedding(usr_component.shape[0],
             usr_component.shape[1],
             weights=[usr_component],
-            input_length=1,
             trainable=False,
             name='usr_component')(embedding_inputs[0])
     usr_component_input = Flatten(name='usr_component_flatten')(usr_component_input)
@@ -313,7 +358,6 @@ def get_model(K, K0, lw=1e-4, lw1=1e-4, lr=1e-3, act='relu', batchnorm=False):
     song_component_embeddings = Embedding(song_component.shape[0],
             song_component.shape[1],
             weights=[song_component],
-            input_length=1,
             trainable=False,
             name='song_component')
     song_component_input = song_component_embeddings(song_id_input)
@@ -326,7 +370,6 @@ def get_model(K, K0, lw=1e-4, lw1=1e-4, lr=1e-3, act='relu', batchnorm=False):
     usr_artist_component_input = Embedding(usr_artist_component.shape[0],
             usr_artist_component.shape[1],
             weights=[usr_artist_component],
-            input_length=1,
             trainable=False,
             name='usr_artist_component')(embedding_inputs[0])
     usr_artist_component_input = Flatten(name='usr_artist_component_flatten')(usr_artist_component_input)
@@ -334,7 +377,6 @@ def get_model(K, K0, lw=1e-4, lw1=1e-4, lr=1e-3, act='relu', batchnorm=False):
     song_artist_component_embeddings = Embedding(song_artist_component.shape[0],
             song_artist_component.shape[1],
             weights=[song_artist_component],
-            input_length=1,
             trainable=False,
             name='song_artist_component')
     song_artist_component_input = song_artist_component_embeddings(song_id_input)
@@ -396,8 +438,8 @@ def get_model(K, K0, lw=1e-4, lw1=1e-4, lr=1e-3, act='relu', batchnorm=False):
     preds = Dense(1, activation='sigmoid', name='prediction')(preds)
         
     model = Model(inputs=embedding_inputs+genre_inputs+[context_input], outputs=preds)
-    
-    opt = RMSprop(lr=lr)
+    opt = RMSprop(learning_rate=lr)
+
     model.compile(loss='binary_crossentropy', optimizer=opt, metrics=['acc'])
 
     return model
@@ -409,6 +451,7 @@ def get_model(K, K0, lw=1e-4, lw1=1e-4, lr=1e-3, act='relu', batchnorm=False):
 ## train the model
 para = pd.read_csv('./nn_record.csv').sort_values(by='val_auc', ascending=False)
 for i in range(5):
+    training_start_time = time.time()
 
     K = para['K'].values[i]
     K0 = para['K0'].values[i]
@@ -434,23 +477,58 @@ for i in range(5):
 
         lr_reducer = LearningRateScheduler(lambda x: lr*(lr_decay**x))
         
-        hist = model.fit_generator(train_flow, train_flow.__len__(), \
-                 epochs=bst_epoch, workers=4, callbacks=[lr_reducer])
+        # In TEST_MODE, use only 1-2 epochs for quick testing
+        num_epochs = 2 if TEST_MODE else bst_epoch
+        if TEST_MODE:
+            print(f"TEST_MODE: Using {num_epochs} epochs instead of {bst_epoch}")
+        
+        hist = model.fit(train_flow, 
+                 steps_per_epoch=train_flow.__len__(), 
+                 epochs=num_epochs, 
+                 callbacks=[lr_reducer])
         
         train_loss = hist.history['loss'][-1]
         
-        if(train_loss < train_loss0 * 1.1):
+        os.makedirs('./temp_nn/models', exist_ok=True)
+        model_path = './temp_nn/models/nn_model_seed%d_config%d.weights.h5' % (RANDOM_SEED, i)
+        model.save_weights(model_path)
+        print(f'Model weights saved to: {model_path}')
+        
+        # skip the loss check in test mode
+        if TEST_MODE:
             break
         
-    val_auc = para['val_auc'].values[i]
-    print('Model training done. Validation AUC: %.5f'%val_auc)
-
-    flag = np.random.randint(0, 65536)
+        if(train_loss < train_loss0 * 1.1):
+            break
     
+    training_end_time = time.time()
+    training_runtime = training_end_time - training_start_time
+    print(f'\nModel training runtime: {training_runtime:.2f} seconds ({training_runtime/60:.2f} minutes)')
+    
+    # Calculate validation metrics
     test_flow = dataGenerator.flow(test_embeddings + test_genre, [test_context], \
             batch_size=16384, shuffle=False)
-    test_pred = model.predict_generator(test_flow, test_flow.__len__(), workers=1)
+    test_pred = model.predict(test_flow, 
+                               steps=test_flow.__len__())
     
-    test_sub = pd.DataFrame({'id': test_id, 'target': test_pred.ravel()})
-    test_sub.to_csv('./temp_nn/nn_%.5f_%.5f_%d.csv'%(val_auc, train_loss, flag), index=False)
+    # Calculate AUC on validation set
+    val_auc_calculated = roc_auc_score(test_y.values, test_pred.ravel())
+    print('Model training done. Test set AUC (calculated): %.5f'%val_auc_calculated)
     
+    # Create results dataframe with predictions and ground truth
+    os.makedirs('./temp_nn', exist_ok=True)
+    test_sub = pd.DataFrame({
+        'id': test_id, 
+        'prediction': test_pred.ravel(),
+        'ground_truth_target': test_y.values
+    })
+    
+    if TEST_MODE:
+        output_filename = './temp_nn/nn_%.5f_%.5f_seed%d_test.csv'%(val_auc_calculated, train_loss, RANDOM_SEED)
+    else:
+        output_filename = './temp_nn/nn_%.5f_%.5f_seed%d.csv'%(val_auc_calculated, train_loss, RANDOM_SEED)
+    test_sub.to_csv(output_filename, index=False)
+    
+    print(f'Predictions saved to: {output_filename}')
+    
+print("All done.")

@@ -5,6 +5,8 @@ import warnings
 from abc import ABCMeta, abstractmethod
 from keras import backend as K
 
+from keras.utils import Sequence as KerasSequence
+
 class DataGenerator(object):
     def __init__(self, class_size=None):
         self.class_size = class_size
@@ -15,21 +17,9 @@ class DataGenerator(object):
             batch_size=batch_size,
             shuffle=shuffle)
 
-class Sequence(object):
-
-    @abstractmethod
-    def __getitem__(self, index):
-        raise NotImplementedError
-
-    @abstractmethod
-    def __len__(self):
-        raise NotImplementedError
-
-    def on_epoch_end(self):
-        pass
-
-class Iterator(Sequence):
-    def __init__(self, n, batch_size, shuffle):
+class Iterator(KerasSequence):
+    def __init__(self, n, batch_size, shuffle, **kwargs):
+        super().__init__(**kwargs)
         self.n = n
         self.batch_size = batch_size
         self.shuffle = shuffle
@@ -92,7 +82,7 @@ class Iterator(Sequence):
 
 class NumpyArrayIterator(Iterator):
     def __init__(self, x_cat, x_num, y, data_generator,
-                 batch_size=32, shuffle=False):
+                 batch_size=32, shuffle=False, **kwargs):
         if y is not None:
             self.y = np.asarray(y)
         else:
@@ -101,17 +91,18 @@ class NumpyArrayIterator(Iterator):
         self.x_num = x_num
         
         self.data_generator = data_generator
-        super(NumpyArrayIterator, self).__init__(len(x_cat[0]), batch_size, shuffle)
+        super(NumpyArrayIterator, self).__init__(len(x_cat[0]), batch_size, shuffle, **kwargs)
 
     def _get_batches_of_transformed_samples(self, index_array):
-        x_batch_deep = [data[index_array] for data in self.x_cat]
-        x_batch_deep += [data[index_array] for data in self.x_num]
+        x_batch_deep = [np.asarray(data[index_array]) for data in self.x_cat]
+        x_batch_deep += [np.asarray(data[index_array]) for data in self.x_num]
+        x_batch_deep = tuple(x_batch_deep)
         
         if self.y is None:
-            return x_batch_deep
+            return (x_batch_deep,)
         else:
-            batch_y = self.y[index_array]
-            return x_batch_deep, batch_y
+            batch_y = np.asarray(self.y[index_array])
+            return (x_batch_deep, batch_y)
 
     def next(self):
         with self.lock:

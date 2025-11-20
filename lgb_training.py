@@ -1,29 +1,78 @@
 import gc
 import datetime
+import time
 import numpy as np
 import pandas as pd
 import lightgbm as lgb
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score
+
+# Set TEST_MODE = True for quick testing (reduced data)
+TEST_MODE = True  # Change to True for quick testing
+
+RANDOM_SEED = 13
+folder = 'training'
+
+if TEST_MODE:
+    print("\n" + "="*60)
+    print("TEST_MODE ENABLED - Using reduced data for quick testing")
+    print("="*60 + "\n")
 
 #####################################################
 ## Data Loading
 #####################################################
 
-folder = 'training'
+param_start_time = time.time()
 
+print(f'Splitting data with random seed: {RANDOM_SEED}')
 ## load data
 if folder == 'training':
-    train = pd.read_csv('./input/%s/train_part.csv'%folder)
-    train_add = pd.read_csv('./input/%s/train_part_add.csv'%folder)
+    if TEST_MODE:
+        print("TEST_MODE: Loading only 10,000 rows for quick testing")
+        train_full = pd.read_csv('./input/%s/train_part.csv'%folder, nrows=10000)
+        train_add_full = pd.read_csv('./input/%s/train_part_add.csv'%folder, nrows=10000)
+    else:
+        train_full = pd.read_csv('./input/%s/train_part.csv'%folder)
+        train_add_full = pd.read_csv('./input/%s/train_part_add.csv'%folder)
 elif folder == 'validation':
-    train = pd.read_csv('./input/%s/train.csv'%folder)
-    train_add = pd.read_csv('./input/%s/train_add.csv'%folder)
-train_y = train['target']
-train.drop(['target'], inplace=True, axis=1)
+    if TEST_MODE:
+        print("TEST_MODE: Loading only 10,000 rows for quick testing")
+        train_full = pd.read_csv('./input/%s/train.csv'%folder, nrows=10000)
+        train_add_full = pd.read_csv('./input/%s/train_add.csv'%folder, nrows=10000)
+    else:
+        train_full = pd.read_csv('./input/%s/train.csv'%folder)
+        train_add_full = pd.read_csv('./input/%s/train_add.csv'%folder)
 
-test = pd.read_csv('./input/%s/test.csv'%folder)
-test_add = pd.read_csv('./input/%s/test_add.csv'%folder)
-test_id = test['id']
-test.drop(['id'], inplace=True, axis=1)
+# Extract target before splitting
+train_y_full = train_full['target'].copy()
+
+# Split data 80-20
+train_indices, test_indices, train_y, test_y = train_test_split(
+    train_full.index, train_y_full, 
+    test_size=0.2, 
+    random_state=RANDOM_SEED,
+    stratify=train_y_full  # maintain class distribution
+)
+
+# split train and train_add using the same indices
+train = train_full.iloc[train_indices].reset_index(drop=True)
+test = train_full.iloc[test_indices].reset_index(drop=True)
+train_add = train_add_full.iloc[train_indices].reset_index(drop=True)
+test_add = train_add_full.iloc[test_indices].reset_index(drop=True)
+
+# reset indices for targets
+train_y = train_y.reset_index(drop=True)
+test_y = test_y.reset_index(drop=True)
+
+# drop target from both train and test
+train.drop(['target'], inplace=True, axis=1)
+test.drop(['target'], inplace=True, axis=1)
+
+print(f'Training set size: {len(train):,}')
+print(f'Validation set size: {len(test):,}')
+
+# create test_id for saving (using index)
+test_id = test.index.values
 
 train_add['source'] = train_add['source'].astype('category')
 test_add['source'] = test_add['source'].astype('category')
@@ -184,14 +233,18 @@ print('Training data shape:')
 print(train.shape)
 print('Testing data shape:')
 print(test.shape)
-print('Features invlove:')
+print('Features involved:')
 print(train.columns)
+param_end_time = time.time()
+param_runtime = param_end_time - param_start_time
+print(f'\nData preparation runtime: {param_runtime:.2f} seconds ({param_runtime/60:.2f} minutes)')
 
 #####################################################
 ## Model Training
 #####################################################
 
 ## model training
+training_start_time = time.time()
 train_data = lgb.Dataset(train, label=train_y, free_raw_data=True)
 
 del train
@@ -228,20 +281,39 @@ for i in range(1):
     print(params)
 
     num_round = para['bst_rnd'].values[i]
-    print('Round number: %d'%num_round)
+    
+    # In TEST_MODE, use fewer rounds for quick testing
+    if TEST_MODE:
+        num_round = min(10, num_round)  # Use max 10 rounds in test mode
+        print(f'TEST_MODE: Using {num_round} rounds instead of {para["bst_rnd"].values[i]}')
+    else:
+        print('Round number: %d'%num_round)
 
     gbm = lgb.train(params, train_data, num_round, valid_sets=[train_data], callbacks=[lgb.log_evaluation(100)])
 
-    val_auc = para['val_auc'].values[i]
-    print('Model training done. Validation AUC: %.5f'%val_auc)
+    training_end_time = time.time()
+    training_runtime = training_end_time - training_start_time
+    print(f'\n Training runtime: {training_runtime:.2f} seconds ({training_runtime/60:.2f} minutes)')
 
     feature_importance = pd.DataFrame({'name':gbm.feature_name(), 'importance':gbm.feature_importance()}).sort_values(by='importance', ascending=False)
-    feature_importance.to_csv('./feat_importance_for_test.csv', index=False)
-    
-    flag = np.random.randint(0, 65536)    
+    feature_importance.to_csv('./feat_importance_for_test_seed%d.csv'%(RANDOM_SEED), index=False)
        
     test_pred = gbm.predict(test)
-    test_sub = pd.DataFrame({'id': test_id, 'target': test_pred})
-    test_sub.to_csv('./submission/lgb_%.5f_%d.csv.gz'%(val_auc, flag), index=False, \
-            compression='gzip')
     
+    val_auc_calculated = roc_auc_score(test_y.values, test_pred)
+    print('Model training done. Test set AUC (calculated): %.5f'%val_auc_calculated)
+    
+    # Create results dataframe with predictions and ground truth
+    test_sub = pd.DataFrame({
+        'id': test_id, 
+        'prediction': test_pred,
+        'ground_truth_target': test_y.values
+    })
+    
+    if TEST_MODE:
+        output_filename = './submission/lgb_%.5f_seed%d_test.csv'%(val_auc_calculated, RANDOM_SEED)
+    else:
+        output_filename = './submission/lgb_%.5f_seed%d.csv'%(val_auc_calculated, RANDOM_SEED)
+    test_sub.to_csv(output_filename, index=False)
+    
+    print(f'Predictions saved to: {output_filename}')    
