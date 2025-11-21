@@ -19,4 +19,4 @@ SIF_IMG="tensorflow_latest-gpu.sif"
 echo "Starting LightGBM Training..."
 
 # Execute
-singularity exec --nv --overlay $OVERLAY_IMG:ro $SIF_IMG python -u lgb_training_multi_seed.py
+singularity exec --overlay $OVERLAY_IMG:ro $SIF_IMG python -u lgb_training_multi_seed.py
