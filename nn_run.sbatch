@@ -12,7 +12,7 @@
 mkdir -p logs
 
 module purge
-module load singularity
+module load singularity/3.7.4
 
 # Define paths
 OVERLAY_IMG="my_env.ext3"
