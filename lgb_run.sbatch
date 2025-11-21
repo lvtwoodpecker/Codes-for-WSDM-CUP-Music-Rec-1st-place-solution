@@ -17,5 +17,7 @@ module load singularity/3.7.4
 OVERLAY_IMG="my_env.ext3"
 SIF_IMG="tensorflow_latest-gpu.sif"
 
+echo "Starting LightGBM Training..."
+
 # Execute
 singularity exec --nv --overlay $OVERLAY_IMG:ro $SIF_IMG python lgb_training_multi_seed.py
