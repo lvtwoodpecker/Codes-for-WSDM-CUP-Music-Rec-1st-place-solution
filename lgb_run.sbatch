@@ -4,7 +4,7 @@
 #SBATCH --error=logs/lgb_%j.err
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=16       # LightGBM scales well with more CPUs
-#SBATCH --mem=64GB               # High RAM for GBDT
+#SBATCH --mem=128GB              # 128GB RAM for GBDT
 #SBATCH --gres=gpu:1             # Request GPU to keep environment consistent
 #SBATCH --time=48:00:00          # 2 days
 

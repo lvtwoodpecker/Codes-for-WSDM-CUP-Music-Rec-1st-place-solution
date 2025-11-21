@@ -22,6 +22,15 @@ def train_lgb_model(random_seed, folder='training', test_mode=False):
     
     param_start_time = time.time()
     
+    ## Define dtypes for memory optimization
+    dtypes_train = {
+        'target': 'int8',  # Binary target, int8 saves memory
+        'msno': 'category', 
+        'song_id': 'category',
+        'before_song_id': 'category',
+        'after_song_id': 'category'
+    }
+    
     ## load data
     if test_mode:
         print("TEST_MODE: Loading only 10,000 rows for quick testing")
@@ -31,21 +40,28 @@ def train_lgb_model(random_seed, folder='training', test_mode=False):
     
     if folder == 'training':
         if nrows:
-            train_full = pd.read_csv('./input/%s/train_part.csv'%folder, nrows=nrows)
+            train_full = pd.read_csv('./input/%s/train_part.csv'%folder, nrows=nrows, dtype=dtypes_train)
             train_add_full = pd.read_csv('./input/%s/train_part_add.csv'%folder, nrows=nrows)
         else:
-            train_full = pd.read_csv('./input/%s/train_part.csv'%folder)
+            train_full = pd.read_csv('./input/%s/train_part.csv'%folder, dtype=dtypes_train)
             train_add_full = pd.read_csv('./input/%s/train_part_add.csv'%folder)
     elif folder == 'validation':
         if nrows:
-            train_full = pd.read_csv('./input/%s/train.csv'%folder, nrows=nrows)
+            train_full = pd.read_csv('./input/%s/train.csv'%folder, nrows=nrows, dtype=dtypes_train)
             train_add_full = pd.read_csv('./input/%s/train_add.csv'%folder, nrows=nrows)
         else:
-            train_full = pd.read_csv('./input/%s/train.csv'%folder)
+            train_full = pd.read_csv('./input/%s/train.csv'%folder, dtype=dtypes_train)
             train_add_full = pd.read_csv('./input/%s/train_add.csv'%folder)
 
     # Extract target before splitting
     train_y_full = train_full['target'].copy()
+    
+    # Convert msno to numeric type for merging (category/object causes merge issues)
+    # We read as category for memory, but convert to int64 for merging compatibility
+    if train_full['msno'].dtype.name in ['category', 'object']:
+        train_full['msno'] = pd.to_numeric(train_full['msno'], errors='coerce').astype('int64')
+    elif train_full['msno'].dtype.name != 'int64':
+        train_full['msno'] = train_full['msno'].astype('int64')
 
     # Split data 80-20
     train_indices, test_indices, train_y, test_y = train_test_split(
