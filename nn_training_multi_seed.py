@@ -541,8 +541,8 @@ def train_nn_model(random_seed, folder='training', config_index=0, test_mode=Fal
     test_sub = pd.DataFrame({
         'id': test_id,  # Sequential index in validation set (0, 1, 2, ...)
         'original_index': original_test_indices,  # original row index from train_part.csv
-        'song_id': test_song_id,  # For mapping to songs.csv -> artist_name -> artists.csv
-        'msno': test_msno,  # member ID
+        'song_id': test_song_id, 
+        'msno': test_msno,
         'prediction': test_pred.ravel(),
         'ground_truth_target': test_y.values
     })

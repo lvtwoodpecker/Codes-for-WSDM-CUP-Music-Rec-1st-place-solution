@@ -3,7 +3,7 @@
 #SBATCH --output=logs/logs_nn_%j.out    # Output log file (%j = Job ID)
 #SBATCH --error=logs/logs_nn_%j.err     # Error log file
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=16          # 16 CPUs for data loading
+#SBATCH --cpus-per-task=12         # 12 CPUs for data loading
 #SBATCH --mem=64GB                 # 64GB RAM for big CSVs
 #SBATCH --gres=gpu:1               # Request 1 GPU
 #SBATCH --time=48:00:00            # Run for 48 hours

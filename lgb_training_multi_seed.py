@@ -91,6 +91,10 @@ def train_lgb_model(random_seed, folder='training', test_mode=False):
     # Save original indices BEFORE reset_index for mapping back to train_part.csv
     # This allows us to map predictions back to original data rows
     original_test_indices = test_indices.copy()
+        
+    # Save the values
+    test_song_id = test['song_id'].values.copy()
+    test_msno = test['msno'].values.copy()
     
     # create test_id for saving (using sequential index for now, but we'll save original too)
     test_id = test.index.values
@@ -297,7 +301,27 @@ def train_lgb_model(random_seed, folder='training', test_mode=False):
     else:
         print(f'Round number: {num_round}')
 
-    gbm = lgb.train(params, train_data, num_round, valid_sets=[train_data], callbacks=[lgb.log_evaluation(100)])
+    # Try training with GPU, fall back to CPU if GPU is not available
+    try:
+        print('Attempting to train with GPU...')
+        gbm = lgb.train(params, train_data, num_round, valid_sets=[train_data], callbacks=[lgb.log_evaluation(100)])
+        print('Training completed with GPU')
+    except Exception as e:
+        error_str = str(e)
+        if 'GPU' in error_str or 'gpu' in error_str.lower() or 'USE_GPU' in error_str:
+            print(f'GPU not available (LightGBM not compiled with GPU support), falling back to CPU...')
+            # Remove GPU parameters and retry with CPU
+            params_cpu = params.copy()
+            params_cpu['device'] = 'cpu'
+            if 'gpu_platform_id' in params_cpu:
+                del params_cpu['gpu_platform_id']
+            if 'gpu_device_id' in params_cpu:
+                del params_cpu['gpu_device_id']
+            gbm = lgb.train(params_cpu, train_data, num_round, valid_sets=[train_data], callbacks=[lgb.log_evaluation(100)])
+            print('Training completed with CPU')
+        else:
+            # Re-raise if it's a different error
+            raise
 
     training_end_time = time.time()
     training_runtime = training_end_time - training_start_time
@@ -318,8 +342,8 @@ def train_lgb_model(random_seed, folder='training', test_mode=False):
     test_sub = pd.DataFrame({
         'id': test_id,  # Sequential index in validation set (0, 1, 2, ...)
         'original_index': original_test_indices,  # original row index from train_part.csv
-        'song_id': test['song_id'].astype('int64').values,
-        'msno': test['msno'].astype('int64').values,  # Member ID
+        'song_id': pd.Series(test_song_id).astype('int64').values, 
+        'msno': pd.Series(test_msno).astype('int64').values, 
         'prediction': test_pred,
         'ground_truth_target': test_y.values
     })
