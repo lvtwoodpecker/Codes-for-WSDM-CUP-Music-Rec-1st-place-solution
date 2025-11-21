@@ -5,7 +5,6 @@
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=24       # 24 CPUs for LightGBM
 #SBATCH --mem=128GB              # 128GB RAM for GBDT
-#SBATCH --gres=gpu:1             # Request 1 GPU
 #SBATCH --time=48:00:00          # 2 days
 
 mkdir -p logs
