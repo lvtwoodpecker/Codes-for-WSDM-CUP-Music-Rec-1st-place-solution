@@ -88,7 +88,11 @@ def train_lgb_model(random_seed, folder='training', test_mode=False):
     print(f'Training set size: {len(train):,}')
     print(f'Validation set size: {len(test):,}')
 
-    # create test_id for saving (using index)
+    # Save original indices BEFORE reset_index for mapping back to train_part.csv
+    # This allows us to map predictions back to original data rows
+    original_test_indices = test_indices.copy()
+    
+    # create test_id for saving (using sequential index for now, but we'll save original too)
     test_id = test.index.values
 
     train_add['source'] = train_add['source'].astype('category')
@@ -305,8 +309,13 @@ def train_lgb_model(random_seed, folder='training', test_mode=False):
     print(f'Test set AUC (calculated): {val_auc:.5f}')
     
     # Create results dataframe with predictions and ground truth
+    # Include original_index to map back to train_part.csv, and song_id/msno for artist mapping
+    # Note: song_id and msno are category type, convert back to int64 for saving
     test_sub = pd.DataFrame({
-        'id': test_id, 
+        'id': test_id,  # Sequential index in validation set (0, 1, 2, ...)
+        'original_index': original_test_indices,  # original row index from train_part.csv
+        'song_id': test['song_id'].astype('int64').values,
+        'msno': test['msno'].astype('int64').values,  # Member ID
         'prediction': test_pred,
         'ground_truth_target': test_y.values
     })

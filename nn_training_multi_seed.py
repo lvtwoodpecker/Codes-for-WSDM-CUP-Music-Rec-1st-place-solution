@@ -12,23 +12,6 @@ print('TensorFlow GPU Configuration')
 print('='*60)
 print(f'TensorFlow version: {tf.__version__}')
 
-# List available GPUs
-gpus = tf.config.list_physical_devices('GPU')
-if gpus:
-    print(f'Found {len(gpus)} GPU(s):')
-    for i, gpu in enumerate(gpus):
-        print(f'  GPU {i}: {gpu.name}')
-    # Configure GPU memory growth to avoid allocation errors
-    try:
-        for gpu in gpus:
-            tf.config.experimental.set_memory_growth(gpu, True)
-        print('GPU memory growth enabled')
-    except RuntimeError as e:
-        print(f'Warning: Could not set GPU memory growth: {e}')
-else:
-    print('WARNING: No GPUs detected! Training will use CPU (much slower)')
-print('='*60 + '\n')
-
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import roc_auc_score, log_loss
 from sklearn.model_selection import train_test_split
@@ -110,7 +93,16 @@ def train_nn_model(random_seed, folder='training', config_index=0, test_mode=Fal
     print(f'Training set size: {len(train):,}')
     print(f'Validation set size: {len(test):,}')
 
-    # Create test_id for saving (using index)
+    # Save original indices BEFORE reset_index for mapping back to train_part.csv
+    # This allows us to map predictions back to original data rows
+    original_test_indices = test_indices.copy()
+    
+    # Save song_id and msno BEFORE any deletions/transformations for mapping to artists
+    # These are needed for auditing predictions by artist protected class
+    test_song_id = test['song_id'].values.copy()
+    test_msno = test['msno'].values.copy()
+    
+    # Create test_id for saving (using sequential index for now, but we'll save original too)
     test_id = test.index.values
 
     for col in train_add.columns:
@@ -544,9 +536,13 @@ def train_nn_model(random_seed, folder='training', config_index=0, test_mode=Fal
     print('Model training done. Test set AUC (calculated): %.5f'%val_auc_calculated)
     
     # Create results dataframe with predictions and ground truth
+    # Include original_index to map back to train_part.csv, and song_id/msno for artist mapping
     os.makedirs('./temp_nn', exist_ok=True)
     test_sub = pd.DataFrame({
-        'id': test_id, 
+        'id': test_id,  # Sequential index in validation set (0, 1, 2, ...)
+        'original_index': original_test_indices,  # original row index from train_part.csv
+        'song_id': test_song_id,  # For mapping to songs.csv -> artist_name -> artists.csv
+        'msno': test_msno,  # member ID
         'prediction': test_pred.ravel(),
         'ground_truth_target': test_y.values
     })
