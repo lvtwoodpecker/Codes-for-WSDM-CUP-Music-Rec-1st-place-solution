@@ -25,4 +25,4 @@ echo "GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader)"
 # Run the Python script
 # --nv: Enable GPU
 # :ro:  Read-Only overlay (Critical for running multiple jobs)
-singularity exec --nv --overlay $OVERLAY:ro $SIF_IMAGE python nn_training_multi_seed.py
+singularity exec --nv --overlay $OVERLAY:ro $SIF_IMAGE python -u nn_training_multi_seed.py

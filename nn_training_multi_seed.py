@@ -4,10 +4,6 @@ import datetime
 import time
 import numpy as np
 import pandas as pd
-
-# Configure TensorFlow to use GPU before importing
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Suppress warnings
-
 import tensorflow as tf
 
 # Verify and configure GPU
