@@ -308,8 +308,12 @@ def train_lgb_model(random_seed, folder='training', test_mode=False):
         print('Training completed with GPU')
     except Exception as e:
         error_str = str(e)
-        if 'GPU' in error_str or 'gpu' in error_str.lower() or 'USE_GPU' in error_str:
-            print(f'GPU not available (LightGBM not compiled with GPU support), falling back to CPU...')
+        # Catch various GPU-related errors:
+        # - "GPU Tree Learner was not enabled" (not compiled with GPU)
+        # - "No OpenCL device found" (no GPU available)
+        # - Other GPU-related errors
+        if any(keyword in error_str for keyword in ['GPU', 'gpu', 'USE_GPU', 'OpenCL', 'opencl', 'device found']):
+            print(f'GPU not available ({error_str[:100]}), falling back to CPU...')
             # Remove GPU parameters and retry with CPU
             params_cpu = params.copy()
             params_cpu['device'] = 'cpu'
