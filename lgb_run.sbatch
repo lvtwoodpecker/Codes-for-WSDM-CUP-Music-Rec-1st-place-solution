@@ -3,7 +3,7 @@
 #SBATCH --output=logs/lgb_%j.out
 #SBATCH --error=logs/lgb_%j.err
 #SBATCH --nodes=1
-#SBATCH --cpus-per-task=16       # LightGBM scales well with more CPUs
+#SBATCH --cpus-per-task=24       # 24 CPUs for LightGBM
 #SBATCH --mem=128GB              # 128GB RAM for GBDT
 #SBATCH --time=48:00:00          # 2 days
 

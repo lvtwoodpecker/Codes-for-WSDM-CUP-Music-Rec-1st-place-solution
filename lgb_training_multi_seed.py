@@ -263,6 +263,10 @@ def train_lgb_model(random_seed, folder='training', test_mode=False):
         'objective': 'binary',
         'metric': ['binary_logloss', 'auc'], 
         
+        'device': 'gpu',  # Use GPU for training (falls back to CPU if GPU not available)
+        'gpu_platform_id': 0,  # GPU platform ID (usually 0)
+        'gpu_device_id': 0,  # GPU device ID (usually 0)
+        
         'learning_rate': para['lr'].values[0],
         
         'num_leaves': para['n_leaf'].values[0],
